@@ -1,4 +1,10 @@
 use rust_decimal::prelude::*;
+use std::io;
+
+enum ClientErrors {
+    AccountLocked,
+    InsufficientFunds
+}
 
 #[derive(Default, Debug)]
 struct Client {
@@ -9,11 +15,17 @@ struct Client {
 }
 
 impl Client {
-    fn deposit(&mut self, amount: Decimal) {
+    fn deposit(&mut self, amount: Decimal) -> io::Result<()> {
         self.available += amount;
         self.total += amount;
+        Ok(())
     }
 
+    fn withdrawl(&mut self, amount: Decimal) -> io::Result<()> {
+        self.available -= amount;
+        self.total -= amount;
+        Ok(())
+    }
 }
 
 fn main() {
@@ -52,10 +64,24 @@ mod tests {
         let mut client = Client::default();
         println!("{:?}", client);
 
-        client.deposit(dec!(5.12));
-        assert_eq!(client.available, dec!(5.12));
+        client.deposit(dec!(3.14)).unwrap();
+        assert_eq!(client.available, dec!(3.14));
         assert_eq!(client.held, dec!(0));
-        assert_eq!(client.total, dec!(5.12));
+        assert_eq!(client.total, dec!(3.14));
         assert_eq!(client.locked, false);
+    }
+
+    #[test]
+    fn test_simple_withdrawl() {
+        let mut client = Client::default();
+        println!("{:?}", client);
+
+        client.deposit(dec!(3.14)).unwrap();
+        client.withdrawl(dec!(3.14)).unwrap();
+        assert_eq!(client.available, dec!(0));
+        assert_eq!(client.held, dec!(0));
+        assert_eq!(client.total, dec!(0));
+        assert_eq!(client.locked, false);
+
     }
 }
