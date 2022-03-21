@@ -1,0 +1,40 @@
+= TTE -- Toy Transaction Engine
+:icons: font
+:source-highlighter: pygments
+Tim Weaver
+2022/03/21
+
+This is a command line tool that reads a CSV file containing a series of
+transactions and generates an accounts balance output file also in CSV.
+
+.The goals are
+* Update client accounts
+* Handle disputes
+* Handle chargebacks
+* Ouput the state of clients accounts
+
+
+## Example Input and Output
+
+.Example Transactions Input Data
+[source,csv]
+----
+type,       client,     tx,     amount
+deposit,         1,     1,         1.0
+deposit,         2,     2,         2.0
+deposit,         1,     3,         2.0
+withdrawal,      1,     4,         1.5
+withdrawal,      2,     5,         3.0
+----
+
+IMPORTANT: The assumption is that there *will* be a header line in the CSV file
+that will be skipped when parsing. If this assumption is false then it's
+possible that the first transaction will be skipped inadvertently.
+
+.Example Accounts Output Data
+[source,csv]
+----
+client, available, held, total, locked
+     1,       1.5,  0.0,   1.5,  false
+     2,       2.0,  0.0,   2.0,  false
+----
