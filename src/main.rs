@@ -3,9 +3,12 @@ use std::io;
 
 enum ClientErrors {
     AccountLocked,
-    InsufficientFunds
+    InsufficientFunds,
 }
 
+// Client data
+// Assumption #1 - If an account is locked no future deposits/withdrawls are
+// allowed
 #[derive(Default, Debug)]
 struct Client {
     available: Decimal,
@@ -26,22 +29,28 @@ impl Client {
         self.total -= amount;
         Ok(())
     }
+
+    fn dispute(&mut self, amount: Decimal) -> io::Result<()> {
+        self.available -= amount;
+        self.held += amount;
+        Ok(())
+    }
+
+    fn resolve(&mut self, amount: Decimal) -> io::Result<()> {
+        self.held -= amount;
+        self.available += amount;
+        Ok(())
+    }
+
+    fn chargeback(&mut self, amount: Decimal) -> io::Result<()> {
+        self.locked = true;
+        self.held -= amount;
+        self.total -= amount;
+        Ok(())
+    }
 }
 
-fn main() {
-    let a = Decimal::from_str("0.10055").unwrap();
-    let b = Decimal::from_str("9.9").unwrap();
-    let result_5 = (a + b).round_dp(5);
-    let result_4 = (a + b).round_dp(4);
-    println!("dp 5: {result_5}");
-    println!("dp 4: {result_4}");
-
-    let float_result_fwd: f32 = 0.10055 + 9.9;
-    println!("Truncated to 5 places: {float_result_fwd:.5}");
-    println!("Truncated to 4 places: {float_result_fwd:.4}");
-//    let float_result_rev: f32 = 991.1 + 0.1001 + 0.5112 + 1.543 + 3.712 + 25.54 + 75.61 + 85.67 + 225.0 + 327.6;
-//    println!("{float_result_rev:.4}");
-}
+fn main() {}
 
 #[cfg(test)]
 mod tests {
@@ -60,7 +69,7 @@ mod tests {
     }
 
     #[test]
-    fn test_simple_deposit() {
+    fn test_basic_deposit() {
         let mut client = Client::default();
         println!("{:?}", client);
 
@@ -72,7 +81,7 @@ mod tests {
     }
 
     #[test]
-    fn test_simple_withdrawl() {
+    fn test_basic_withdrawl() {
         let mut client = Client::default();
         println!("{:?}", client);
 
@@ -82,6 +91,49 @@ mod tests {
         assert_eq!(client.held, dec!(0));
         assert_eq!(client.total, dec!(0));
         assert_eq!(client.locked, false);
+    }
 
+    #[test]
+    fn test_basic_dispute() {
+        let mut client = Client::default();
+        print!("{:?}", client);
+
+        let amount: Decimal = dec!(6.62);
+        client.deposit(amount).unwrap();
+        client.dispute(amount).unwrap();
+        assert_eq!(client.available, dec!(0));
+        assert_eq!(client.held, amount);
+        assert_eq!(client.total, amount);
+        assert_eq!(client.locked, false);
+    }
+
+    #[test]
+    fn test_basic_resolve() {
+        let mut client = Client::default();
+        print!("{:?}", client);
+
+        let amount: Decimal = dec!(6.02);
+        client.deposit(amount).unwrap();
+        client.dispute(amount).unwrap();
+        client.resolve(amount).unwrap();
+        assert_eq!(client.held, dec!(0));
+        assert_eq!(client.available, amount);
+        assert_eq!(client.total, amount);
+        assert_eq!(client.locked, false);
+    }
+
+    #[test]
+    fn test_basic_chargeback() {
+        let mut client = Client::default();
+        print!("{:?}", client);
+
+        let amount: Decimal = dec!(6.28);
+        client.deposit(amount + amount).unwrap();
+        client.dispute(amount).unwrap();
+        client.chargeback(amount).unwrap();
+        assert_eq!(client.available, amount);
+        assert_eq!(client.held, dec!(0));
+        assert_eq!(client.total, amount);
+        assert_eq!(client.locked, true);
     }
 }
