@@ -21,7 +21,14 @@ transactions and generates an accounts balance output file also in CSV.
 * Ouput the state of clients accounts
 
 
-## Example Input and Output
+== Running
+
+    cargo run -- transactions.csv > accounts.csv
+
+== Input and Output Data
+
+=== Input
+The input is a CSV formatted file similar to the following example
 
 .Example Transactions Input Data
 [source,csv]
@@ -34,9 +41,22 @@ withdrawal,      1,     4,         1.5
 withdrawal,      2,     5,         3.0
 ----
 
-IMPORTANT: The assumption is that there *will* be a header line in the CSV file
-that will be skipped when parsing. If this assumption is false then it's
-possible that the first transaction will be skipped inadvertently.
+IMPORTANT: The assumption is that there *may not* be a header line in the CSV file
+that will be skipped when parsing. To avoid missing a transaction by always
+skipping the first line in a CSV we'll try to parse the line and if it returns
+an Error we can log that error but carry on.
+
+.Transaction Types
+* Deposit
+* Withdrawl
+* Dispute
+* Resolve
+* Chargeback
+
+=== Output
+
+The output from running the program on a given set of input data is an account
+balance summary like this.
 
 .Example Accounts Output Data
 [source,csv]
@@ -45,3 +65,5 @@ client, available, held, total, locked
      1,       1.5,  0.0,   1.5,  false
      2,       2.0,  0.0,   2.0,  false
 ----
+
+The output is also valid CSV, but is written to stdout instead of to a file.
