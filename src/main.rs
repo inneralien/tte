@@ -1,6 +1,6 @@
 use anyhow::Result;
 use csv::Trim;
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use rust_decimal::prelude::*;
 use serde::Deserialize;
 use std::collections::hash_map::Entry;
@@ -12,15 +12,18 @@ use std::fs::File;
 use std::io;
 use std::process;
 
-/// Client records are a simple mapping from transaction id (tx) to amount.
-/// They are used by dispute transactions that reference `tx` to get an amount.
 type Records = HashMap<u32, Decimal>;
 
 /// Client data
-/// Assumption #1 - If an account is locked no future deposits/withdrawals are
+///
+/// This is the main structure for holding client acount balances.
+/// * Assumption #1 - If an account is locked no future deposits/withdrawals are
 /// allowed. There is no way to unlock an account once it is locked.
 #[derive(Default, Debug)]
 struct Client {
+    /// Client records are a simple mapping from transaction id (`tx`) to
+    /// transaction `amount.` They are used by dispute/resolve/chargeback
+    /// transactions that reference `tx` to get an `amount.`
     records: Records,
     available: Decimal,
     held: Decimal,
@@ -43,12 +46,15 @@ impl fmt::Display for Client {
 }
 
 impl Client {
+    /// Add a mapping entry for a `tx` to an `amount`
     fn add_record(&mut self, tx: u32, amount: Decimal) -> Result<()> {
         debug!("add record tx:{}  amount:{}", tx, amount);
         self.records.insert(tx, amount);
         Ok(())
     }
 
+    /// Consumes a transaction provided by [read_csv] and performs the appropriate
+    /// transaction task
     fn transact(&mut self, transaction: Transaction) -> Result<()> {
         match transaction.trans {
             TransType::Deposit => {
@@ -94,7 +100,6 @@ impl Client {
 
     fn deposit(&mut self, amount: Decimal) -> io::Result<()> {
         debug!("depositing: {}", amount);
-        debug!("{}", self);
         self.available += amount;
         self.total += amount;
         debug!("{}", self);
@@ -104,7 +109,6 @@ impl Client {
     fn withdrawal(&mut self, amount: Decimal) -> io::Result<()> {
         if self.available >= amount {
             debug!("withdrawing: {}", amount);
-            debug!("{}", self);
             self.available -= amount;
             self.total -= amount;
             debug!("{}", self);
@@ -202,10 +206,6 @@ fn usage() {
 
 fn main() -> Result<()> {
     env_logger::builder().format_timestamp(None).init();
-    info!("an info");
-    warn!("a warn");
-    error!("an error");
-    debug!("a debug");
 
     let mut clients: HashMap<u16, Client> = HashMap::new();
 
@@ -215,7 +215,7 @@ fn main() -> Result<()> {
                 let transactions = read_csv(open_file);
                 for result in transactions {
                     let transaction: Transaction = result?;
-                    debug!("{:#?}", transaction);
+                    debug!("{:?}", transaction);
 
                     if let Entry::Vacant(e) = clients.entry(transaction.client) {
                         debug!("Adding new client: {}", transaction.client);

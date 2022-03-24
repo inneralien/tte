@@ -18,15 +18,22 @@ transactions and generates an accounts balance output file also in CSV.
 * Update client accounts
 * Handle disputes
 * Handle chargebacks
-* Ouput the state of clients accounts
+* Output the state of clients accounts
 
 .Stretch Goal
-* Learn to spell withdrawal (p.s. it's not withdrawl)
+* Learn to spell withdrawal (p.s. It's not withdrawl)
 
 
 == Running
 
+Default run via cargo that creates an `accounts.csv` file
+
     cargo run -- transactions.csv > accounts.csv
+
+The debug level can be changed by setting the `RUST_LOG` environment variable
+used by the `env_logger` crate.
+
+    RUST_LOG=debug cargo run -- transactions.csv
 
 == Input and Output Data
 
@@ -75,3 +82,21 @@ The output is also valid CSV, but is written to stdout instead of to a file.
 Most errors are silently handled so they don't stop the processing of the
 transaction data. Logging is used to note any errors in the transactions file
 like referencing tx values that haven't been seen yet.
+
+== Things Left to Do
+As software is never done, here are some of the things left to do.
+
+* [ ] Move the `Client` into a file to make it a module.
+* [ ] Find a more concise way to build unit tests. They are currently a jumble.
+      Figuring out how to parameterize unit tests in Rust is a priority.
+* [ ] Figure out how to use csv Writer instead of writing CSV output manually.
+      It's really easy to write it manually at the moment, but would likely get
+      problematic as the program grows
+* [ ] Generate or gather more test data input files. I am woefully lacking
+      valid test data. One alternative would be to model the logic in something
+      like Alloy to help find the edge cases that need special care.
+* [ ] Figure out how to handle CSV files both with and without header lines.
+* [ ] `read_csv` works on anything that is `impl io::Read`, so reading from
+      streams of data wouldn't be too much extra work.
+* [ ] Converting things to async/await would facilitate multiple concurrent
+      producers of CSV data.
