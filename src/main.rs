@@ -1,3 +1,14 @@
+//! TTE
+//!
+//! TTE is a command line tool that reads a CSV file containing a series of
+//! transactions and generates an accounts balance output file also in CSV.
+//!
+//! Build and run it
+//!
+//! ```bash
+//! cargo build
+//! cargo run -- transactions.csv > accounts.csv
+//! ```
 use anyhow::Result;
 use csv::Trim;
 use log::LevelFilter;
@@ -15,7 +26,7 @@ use std::process;
 
 type Records = HashMap<u32, Decimal>;
 
-/// Client data
+/// Client account data
 ///
 /// This is the main structure for holding client acount balances.
 /// * Assumption #1 - If an account is locked no future deposits/withdrawals are
@@ -184,6 +195,8 @@ enum TransType {
     Chargeback,
 }
 
+/// [Transaction] is a struct used by [serde] and [csv] to deserialize the
+/// input CSV data into fields that can be acted upon.
 #[derive(Debug, Deserialize, PartialEq)]
 struct Transaction {
     #[serde(rename = "type")]
@@ -193,7 +206,7 @@ struct Transaction {
     amount: Option<Decimal>,
 }
 
-// Currently only used by the unit tests
+/// Currently only used by the unit tests
 #[allow(dead_code)]
 impl Transaction {
     fn new(trans: TransType, client: u16, tx: u32, amount: Option<Decimal>) -> Transaction {
