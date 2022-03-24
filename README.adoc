@@ -95,7 +95,8 @@ As software is never done, here are some of the things left to do.
       problematic as the program grows
 * [ ] Generate or gather more test data input files. I am woefully lacking
       valid test data. One alternative would be to model the logic in something
-      like Alloy to help find the edge cases that need special care.
+      like https://haslab.github.io/formal-software-design/[Alloy] to help find
+      the edge cases that need special care.
 * [ ] Figure out how to handle CSV files both with and without header lines.
 * [ ] `read_csv` works on anything that is `impl io::Read`, so reading from
       streams of data wouldn't be too much extra work.
