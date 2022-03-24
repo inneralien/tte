@@ -1,5 +1,5 @@
-use anyhow::{Context, Result};
-use csv::{ReaderBuilder, StringRecord, Trim};
+use anyhow::Result;
+use csv::Trim;
 use log::{debug, error, info, warn};
 use rust_decimal::prelude::*;
 use serde::Deserialize;
@@ -54,7 +54,7 @@ impl Client {
             TransType::Deposit => {
                 if !self.locked {
                     if let Some(amount) = transaction.amount {
-                        self.add_record(transaction.tx, amount.into())?;
+                        self.add_record(transaction.tx, amount)?;
                         self.deposit(amount)?;
                     } else {
                         error!("O_o No amount specified in Deposit transaction");
@@ -64,7 +64,7 @@ impl Client {
             TransType::Withdrawal => {
                 if !self.locked {
                     if let Some(amount) = transaction.amount {
-                        self.add_record(transaction.tx, amount.into())?;
+                        self.add_record(transaction.tx, amount)?;
                         self.withdrawal(amount)?;
                     } else {
                         error!("O_o No amount in withdrawn");
@@ -170,6 +170,8 @@ struct Transaction {
     amount: Option<Decimal>,
 }
 
+// Currently only used by the unit tests
+#[allow(dead_code)]
 impl Transaction {
     fn new(trans: TransType, client: u16, tx: u32, amount: Option<Decimal>) -> Transaction {
         Transaction {
@@ -267,11 +269,6 @@ deposit,2,2,2.0
 deposit,1,3,2.0
 withdrawal,1,4,1.5
 withdrawal,2,5,3.0
-";
-
-    const DATA_NO_HEADER: &'static str = "\
-deposit,1,1,1.0
-deposit,2,2,2.0
 ";
 
     fn log_init() {
@@ -409,15 +406,24 @@ deposit,2,2,2.0
         read_csv(DATA_NO_SPACES.as_bytes());
     }
 
-    #[test]
-    fn test_parse_csv_no_header_fails() {
-        //        assert!(read_csv(DATA_NO_HEADER.as_bytes()).is_err());
-    }
+    //    #[test]
+    //    const DATA_NO_HEADER: &'static str = "\
+    //deposit,1,1,1.0
+    //deposit,2,2,2.0
+    //";
+    //
+    //    fn test_parse_csv_no_header_fails() -> Result<()> {
+    //        let transactions = read_csv(DATA_NO_HEADER.as_bytes());
+    //        for result in transactions {
+    //            let transaction: Transaction = result?;
+    //            debug!("{:#?}", transaction);
+    //        }
+    //        Ok(())
+    //    }
 
     #[test]
     fn test_parse_csv_file() {
-        let filename = OsString::from_str("transactions.csv").unwrap();
-        //       assert!(read_csv(File::open(filename).unwrap()).is_ok());
+        let _ = OsString::from_str("transactions.csv").unwrap();
     }
 
     #[test]
