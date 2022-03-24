@@ -1,6 +1,7 @@
 use anyhow::Result;
 use csv::Trim;
-use log::{debug, error, info};
+use log::LevelFilter;
+use log::{debug, error, info, warn};
 use rust_decimal::prelude::*;
 use serde::Deserialize;
 use std::collections::hash_map::Entry;
@@ -19,7 +20,7 @@ type Records = HashMap<u32, Decimal>;
 /// This is the main structure for holding client acount balances.
 /// * Assumption #1 - If an account is locked no future deposits/withdrawals are
 /// allowed. There is no way to unlock an account once it is locked.
-#[derive(Default, Debug)]
+#[derive(Default)]
 struct Client {
     /// Client records are a simple mapping from transaction id (`tx`) to
     /// transaction `amount.` They are used by dispute/resolve/chargeback
@@ -30,6 +31,24 @@ struct Client {
     total: Decimal,
     locked: bool,
     in_dispute: bool,
+}
+
+/// Custom [Debug] impl for [Client] so that the fields are shown without the
+/// [Records] HashMap
+/// ```
+/// Client { available: 24.5  held: 2  total: 26.5  locked: false }
+/// ```
+impl fmt::Debug for Client {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Client {{ available: {}  held: {}  total: {}  locked: {} }}",
+            self.available.round_dp(4),
+            self.held.round_dp(4),
+            self.total.round_dp(4),
+            self.locked
+        )
+    }
 }
 
 impl fmt::Display for Client {
@@ -48,7 +67,7 @@ impl fmt::Display for Client {
 impl Client {
     /// Add a mapping entry for a `tx` to an `amount`
     fn add_record(&mut self, tx: u32, amount: Decimal) -> Result<()> {
-        debug!("add record tx:{}  amount:{}", tx, amount);
+        debug!("  add record tx:{}  amount:{}", tx, amount);
         self.records.insert(tx, amount);
         Ok(())
     }
@@ -99,10 +118,10 @@ impl Client {
     }
 
     fn deposit(&mut self, amount: Decimal) -> io::Result<()> {
-        debug!("depositing: {}", amount);
+        debug!("  depositing: {}", amount);
         self.available += amount;
         self.total += amount;
-        debug!("{}", self);
+        debug!("  {:?}", self);
         Ok(())
     }
 
@@ -113,19 +132,19 @@ impl Client {
             self.total -= amount;
             debug!("{}", self);
         } else {
-            error!("Insufficient funds for withdrawal");
+            warn!("Insufficient funds for withdrawal");
         }
         Ok(())
     }
 
     fn dispute(&mut self, tx: u32) -> io::Result<()> {
         if let Some(amount) = self.records.get(&tx) {
-            info!("dispute tx:{tx} amount:{amount}");
+            info!("Disputing tx:{tx} amount:{amount}");
             self.available -= amount;
             self.held += amount;
             self.in_dispute = true;
         } else {
-            error!("no amount found for tx:{tx}");
+            warn!("Could not find tx:{tx} to dispute. CSV data error?");
         };
         Ok(())
     }
@@ -137,7 +156,7 @@ impl Client {
             self.held -= amount;
             self.in_dispute = false;
         } else {
-            error!("no amount found for tx:{tx}");
+            warn!("Could not find tx:{tx} to resolve. CSV data error?");
         };
         Ok(())
     }
@@ -149,7 +168,7 @@ impl Client {
             self.held -= amount;
             self.total -= amount;
         } else {
-            error!("no amount found for tx:{tx}");
+            warn!("Could not find tx:{tx} to chargeback. CSV data error?");
         };
         Ok(())
     }
@@ -205,7 +224,10 @@ fn usage() {
 }
 
 fn main() -> Result<()> {
-    env_logger::builder().format_timestamp(None).init();
+    env_logger::builder()
+        .format_timestamp(None)
+        .filter_level(LevelFilter::Info)
+        .init();
 
     let mut clients: HashMap<u16, Client> = HashMap::new();
 
@@ -218,10 +240,10 @@ fn main() -> Result<()> {
                     debug!("{:?}", transaction);
 
                     if let Entry::Vacant(e) = clients.entry(transaction.client) {
-                        debug!("Adding new client: {}", transaction.client);
+                        debug!("  Adding new client: {}", transaction.client);
                         e.insert(Client::default());
                     } else {
-                        debug!("Client {} already exists", transaction.client);
+                        debug!("  Client {} exists", transaction.client);
                     }
 
                     if let Some(client) = clients.get_mut(&transaction.client) {
@@ -406,20 +428,29 @@ withdrawal,2,5,3.0
         read_csv(DATA_NO_SPACES.as_bytes());
     }
 
-    //    #[test]
-    //    const DATA_NO_HEADER: &'static str = "\
-    //deposit,1,1,1.0
-    //deposit,2,2,2.0
-    //";
-    //
-    //    fn test_parse_csv_no_header_fails() -> Result<()> {
-    //        let transactions = read_csv(DATA_NO_HEADER.as_bytes());
-    //        for result in transactions {
-    //            let transaction: Transaction = result?;
-    //            debug!("{:#?}", transaction);
-    //        }
-    //        Ok(())
-    //    }
+    #[test]
+    fn test_transaction_chargeback() -> Result<()> {
+        const DATA: &'static str = "\
+type,client,tx,amount
+deposit,1,1,1.0
+deposit,1,2,2.0
+deposit,1,3,100.0
+dispute,1,3,
+deposit,1,4,100.0
+chargeback,1,3,
+";
+        let mut client = Client::default();
+        let transactions = read_csv(DATA.as_bytes());
+        for result in transactions {
+            let transaction: Transaction = result?;
+            client.transact(transaction)?;
+        }
+        assert_eq!(client.held, dec!(0));
+        assert_eq!(client.total, dec!(103));
+        assert_eq!(client.locked, true);
+        assert_eq!(client.in_dispute, true);
+        Ok(())
+    }
 
     #[test]
     fn test_parse_csv_file() {

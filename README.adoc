@@ -30,8 +30,8 @@ Default run via cargo that creates an `accounts.csv` file
 
     cargo run -- transactions.csv > accounts.csv
 
-The debug level can be changed by setting the `RUST_LOG` environment variable
-used by the `env_logger` crate.
+The default log level is Info. The debug level can be changed by setting the
+`RUST_LOG` environment variable used by the `env_logger` crate.
 
     RUST_LOG=debug cargo run -- transactions.csv
 
@@ -81,7 +81,8 @@ The output is also valid CSV, but is written to stdout instead of to a file.
 == Errors
 Most errors are silently handled so they don't stop the processing of the
 transaction data. Logging is used to note any errors in the transactions file
-like referencing tx values that haven't been seen yet.
+like referencing tx values that haven't been seen yet. Logging messages all go
+to stderr so stdio redirected to a file will not get contaminated.
 
 == Things Left to Do
 As software is never done, here are some of the things left to do.
