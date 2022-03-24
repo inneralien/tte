@@ -14,11 +14,14 @@ Tim Weaver
 This is a command line tool that reads a CSV file containing a series of
 transactions and generates an accounts balance output file also in CSV.
 
-.The goals are
+.The Goals
 * Update client accounts
 * Handle disputes
 * Handle chargebacks
 * Ouput the state of clients accounts
+
+.Stretch Goal
+* Learn to spell withdrawal (p.s. it's not withdrawl)
 
 
 == Running
@@ -41,14 +44,14 @@ withdrawal,      1,     4,         1.5
 withdrawal,      2,     5,         3.0
 ----
 
-IMPORTANT: The assumption is that there *may not* be a header line in the CSV file
-that will be skipped when parsing. To avoid missing a transaction by always
-skipping the first line in a CSV we'll try to parse the line and if it returns
-an Error we can log that error but carry on.
+NOTE: *ASSUMPTION* -- There *is* a header line in the CSV file.
+
+NOTE: *ASSUMPTION* -- One can dispute a withdrawal which can cause a negative total which
+would mean that the bank owes the client for funds withdrawn fraudulently.
 
 .Transaction Types
 * Deposit
-* Withdrawl
+* Withdrawal
 * Dispute
 * Resolve
 * Chargeback
@@ -67,3 +70,8 @@ client, available, held, total, locked
 ----
 
 The output is also valid CSV, but is written to stdout instead of to a file.
+
+== Errors
+Most errors are silently handled so they don't stop the processing of the
+transaction data. Logging is used to note any errors in the transactions file
+like referencing tx values that haven't been seen yet.

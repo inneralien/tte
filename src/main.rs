@@ -7,22 +7,18 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::OsString;
+use std::fmt;
 use std::fs::File;
 use std::io;
 use std::process;
-
-enum ClientErrors {
-    AccountLocked,
-    InsufficientFunds,
-}
 
 /// Client records are a simple mapping from transaction id (tx) to amount.
 /// They are used by dispute transactions that reference `tx` to get an amount.
 type Records = HashMap<u32, Decimal>;
 
-// Client data
-// Assumption #1 - If an account is locked no future deposits/withdrawals are
-// allowed. There is no way to unlock an account once it is locked.
+/// Client data
+/// Assumption #1 - If an account is locked no future deposits/withdrawals are
+/// allowed. There is no way to unlock an account once it is locked.
 #[derive(Default, Debug)]
 struct Client {
     records: Records,
@@ -31,6 +27,19 @@ struct Client {
     total: Decimal,
     locked: bool,
     in_dispute: bool,
+}
+
+impl fmt::Display for Client {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}, {}, {}, {}",
+            self.available.round_dp(4),
+            self.held.round_dp(4),
+            self.total.round_dp(4),
+            self.locked
+        )
+    }
 }
 
 impl Client {
@@ -48,47 +57,60 @@ impl Client {
                         self.add_record(transaction.tx, amount.into())?;
                         self.deposit(amount)?;
                     } else {
-                        warn!("No amount specified in transaction");
+                        error!("O_o No amount specified in Deposit transaction");
                     }
                 }
             }
             TransType::Withdrawal => {
                 if !self.locked {
-                    println!(">> withdrawal <<");
                     if let Some(amount) = transaction.amount {
+                        self.add_record(transaction.tx, amount.into())?;
                         self.withdrawal(amount)?;
                     } else {
-                        println!("INFO: No amount in withdrawn");
+                        error!("O_o No amount in withdrawn");
                     }
                 }
             }
             TransType::Dispute => {
-                error!(">> dispute <<");
                 self.dispute(transaction.tx)?;
-                //                let thing = self.records.get(&tx);
-                //                if let Some(amount) = thing { //self.records.get(&tx) {
-                //                    println!("Disputing amount of {}", amount);
-                //                        let amount = amount;
-                //                    self.dispute(amount)?;
-                //                } else {
-                //                    println!("No records found")
-                //                }
             }
-            TransType::Resolve => println!(">> resolve <<"),
-            TransType::Chargeback => println!(">> chargeback <<"),
+            TransType::Resolve => {
+                if self.in_dispute {
+                    self.resolve(transaction.tx)?;
+                } else {
+                    error!("client not in dispute");
+                }
+            }
+            TransType::Chargeback => {
+                if self.in_dispute {
+                    self.chargeback(transaction.tx)?;
+                } else {
+                    error!("client not in dispute");
+                }
+            }
         };
         Ok(())
     }
 
     fn deposit(&mut self, amount: Decimal) -> io::Result<()> {
+        debug!("depositing: {}", amount);
+        debug!("{}", self);
         self.available += amount;
         self.total += amount;
+        debug!("{}", self);
         Ok(())
     }
 
     fn withdrawal(&mut self, amount: Decimal) -> io::Result<()> {
-        self.available -= amount;
-        self.total -= amount;
+        if self.available >= amount {
+            debug!("withdrawing: {}", amount);
+            debug!("{}", self);
+            self.available -= amount;
+            self.total -= amount;
+            debug!("{}", self);
+        } else {
+            error!("Insufficient funds for withdrawal");
+        }
         Ok(())
     }
 
@@ -163,30 +185,12 @@ impl Transaction {
 /// positional arguments, then this returns an error.
 fn get_first_arg() -> Option<OsString> {
     env::args_os().nth(1)
-    //    match env::args_os().nth(1) {
-    //        None => Err(From::from("expected 1 argument, e.g. transactions.csv")),
-    //        Some(file_path) => Ok(file_path),
-    //    }
 }
 
 fn read_csv(csv: impl io::Read) -> csv::DeserializeRecordsIntoIter<impl io::Read, Transaction> {
     let rdr = csv::ReaderBuilder::new().trim(Trim::All).from_reader(csv);
     rdr.into_deserialize()
-    //    for result in rdr.deserialize() {
-    //        let transaction: Transaction = result?;
-    //        println!("{:#?}", transaction);
-    //    }
-    //    Ok(())
 }
-
-//fn transact(
-//    transactions: csv::DeserializeRecordsIntoIter<impl io::Read, Transaction>,
-//) -> Result<Accounts> {
-//    for transaction in transactions {
-//        let record: Transaction = transaction?;
-//        println!("{:?}", record);
-//    }
-//}
 
 fn usage() {
     println!("Usage");
@@ -195,21 +199,12 @@ fn usage() {
 }
 
 fn main() -> Result<()> {
-    env_logger::builder()
-    .format_timestamp(None)
-    .init();
+    env_logger::builder().format_timestamp(None).init();
     info!("an info");
     warn!("a warn");
     error!("an error");
     debug!("a debug");
 
-    //    let filename = match get_first_arg() {
-    //        Ok(filename) => filename,
-    //        Err(error) => {
-    //            println!("{}", error);
-    //            process::exit(1);
-    //        }
-    //    };
     let mut clients: HashMap<u16, Client> = HashMap::new();
 
     if let Some(filename) = get_first_arg() {
@@ -221,41 +216,31 @@ fn main() -> Result<()> {
                     debug!("{:#?}", transaction);
 
                     if let Entry::Vacant(e) = clients.entry(transaction.client) {
-                        info!("Adding new client: {}", transaction.client);
+                        debug!("Adding new client: {}", transaction.client);
                         e.insert(Client::default());
                     } else {
-                        info!("Client {} exists", transaction.client);
+                        debug!("Client {} already exists", transaction.client);
                     }
 
                     if let Some(client) = clients.get_mut(&transaction.client) {
                         client.transact(transaction)?;
                     }
-
-                    //                    if clients.contains_key(&transaction.client) {
-                    //                        println!("Client {} exists", transaction.client);
-                    //                    } else {
-                    //                        println!("Adding new client: {}", transaction.client);
-                    //                        clients.insert(transaction.client, Client::default());
-                    //                    }
                 }
             }
             Err(e) => {
-                println!("{}", e);
+                error!("{}", e);
                 usage();
             }
         };
 
-        for client in clients {
-            println!("{:#?}", client);
+        // Print out all the clients and their account info
+        println!("client, available, held, total, locked");
+        for (id, client) in clients {
+            println!("{}, {}", id, client);
         }
     } else {
         usage();
     }
-
-    //    if let Some(result) = transactions.next() {
-    //        let record: Transaction = result?;
-    //        println!("{:?}", record);
-    //    }
 
     Ok(())
 }
@@ -291,9 +276,9 @@ deposit,2,2,2.0
 
     fn log_init() {
         let _ = env_logger::builder()
-        .format_timestamp(None)
-        .is_test(true)
-        .try_init();
+            .format_timestamp(None)
+            .is_test(true)
+            .try_init();
     }
 
     #[test]
@@ -325,14 +310,21 @@ deposit,2,2,2.0
     fn test_basic_withdrawal() {
         log_init();
         let mut client = Client::default();
-        println!("{:?}", client);
 
-        client.deposit(dec!(3.14)).unwrap();
-        client.withdrawal(dec!(3.14)).unwrap();
-        assert_eq!(client.available, dec!(0));
+        client.deposit(dec!(1.0)).unwrap();
+        client.deposit(dec!(2.0)).unwrap();
+        client.withdrawal(dec!(1.5)).unwrap();
+        assert_eq!(client.available, dec!(1.5));
         assert_eq!(client.held, dec!(0));
-        assert_eq!(client.total, dec!(0));
+        assert_eq!(client.total, dec!(1.5));
         assert_eq!(client.locked, false);
+    }
+
+    #[test]
+    fn test_withdrawal_insufficient_funds() {
+        log_init();
+        let mut client = Client::default();
+        client.withdrawal(dec!(1.5)).unwrap();
     }
 
     #[test]
@@ -393,7 +385,7 @@ deposit,2,2,2.0
         client.dispute(2).unwrap();
         assert_eq!(client.available, amount);
         assert_eq!(client.held, amount);
-        assert_eq!(client.total, amount+amount);
+        assert_eq!(client.total, amount + amount);
         assert_eq!(client.locked, false);
         assert_eq!(client.in_dispute, true);
 
@@ -471,35 +463,39 @@ deposit,2,2,2.0
         assert!(client.transact(record).is_ok());
         assert_eq!(client.available, dec!(6.5));
 
-        // Dispute
+        // Dispute a withdrawal
         let record = Transaction::new(TransType::Dispute, 1, 2, None);
         println!("{:#?}", record);
+        assert_eq!(client.held, dec!(0));
         assert!(client.transact(record).is_ok());
-        assert_eq!(client.available, dec!(2));
+        assert_eq!(client.available, dec!(3));
         assert_eq!(client.total, dec!(6.5));
+        assert_eq!(client.held, dec!(3.5));
         assert!(client.in_dispute);
+
+        // Resolve the dispute
+        let record = Transaction::new(TransType::Resolve, 1, 2, None);
+        println!("{:?}", client);
+        assert!(client.transact(record).is_ok());
+        assert!(!client.in_dispute);
+        assert_eq!(client.available, dec!(6.5));
+        assert_eq!(client.total, dec!(6.5));
+        assert_eq!(client.held, dec!(0));
+
+        // Dispute another
+        let record = Transaction::new(TransType::Dispute, 1, 1, None);
+        assert!(client.transact(record).is_ok());
+
+        // Chargeback
+        let record = Transaction::new(TransType::Chargeback, 1, 1, None);
+        assert!(client.transact(record).is_ok());
+        println!("{:?}", client);
+        assert!(client.in_dispute);
+        assert!(client.locked);
+        assert_eq!(client.held, dec!(0));
+        // Since the dispute was on a withdrawal the total will be negative
+        assert_eq!(client.total, dec!(-3.5));
 
         Ok(())
     }
 }
-
-// type,       client,     tx,     amount
-// deposit,         1,     1,         1.0
-// If client[1] does not exist then
-//   client[1]::new()
-// client[1].deposit(amount)
-
-// deposit,         2,     2,         2.0
-// if client[2] does not exist then
-//   client[2]::new()
-// client[2].deposit(amount)
-
-// dispute,         1,     1,
-// if
-// 1 Client struct per client id
-// Each client maintains a list of transactions with type,tx,amount
-// client_transactions.get(3) -> Client0
-// client_transactions.get(5) -> Client2
-// deposit,         1,     3,         2.0
-// withdrawal,      1,     4,         1.5
-// withdrawal,      2,     5,         3.0
